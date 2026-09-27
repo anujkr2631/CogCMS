@@ -6,8 +6,13 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(__dirname, '..');
 const script = path.join(repoRoot, 'scripts', 'deploy.sh');
-const gitBash = 'C:/Program Files/Git/bin/bash.exe';
-const bash = process.platform === 'win32' && existsSync(gitBash) ? gitBash : 'bash';
+const gitBashCandidates = [
+  'C:/Program Files/Git/bin/bash.exe',
+  'D:/Applications/Git/bin/bash.exe',
+  'C:/Program Files (x86)/Git/bin/bash.exe',
+];
+const gitBash = gitBashCandidates.find(existsSync);
+const bash = process.platform === 'win32' && gitBash ? gitBash : 'bash';
 
 function scratchRepo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'cms-deploy-'));

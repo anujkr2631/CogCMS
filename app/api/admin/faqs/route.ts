@@ -5,6 +5,7 @@ import { faqInputSchema } from '@/lib/validation/faq';
 import { readJson, withAdmin } from '@/lib/http/admin-handler';
 import { validationError } from '@/lib/http/errors';
 import { notifySiteWebhook } from '@/lib/webhook';
+import { recordActivity } from '@/lib/activity/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,5 +45,15 @@ export const POST = withAdmin(async (req, { user, site }) => {
       id: faq._id.toString(),
     });
   }
+  await recordActivity({
+    siteId: site.id,
+    user,
+    action: 'faq.create',
+    entityType: 'faq',
+    entityId: faq._id.toString(),
+    entityTitle: faq.question,
+    metadata: { category: faq.category, status: faq.status },
+    req,
+  });
   return NextResponse.json(faq, { status: 201 });
 });

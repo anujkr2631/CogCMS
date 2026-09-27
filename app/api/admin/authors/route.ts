@@ -5,6 +5,7 @@ import { authorInputSchema } from '@/lib/validation/author';
 import { readJson, withAdmin } from '@/lib/http/admin-handler';
 import { validationError } from '@/lib/http/errors';
 import { notifySiteWebhook } from '@/lib/webhook';
+import { recordActivity } from '@/lib/activity/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,5 +38,15 @@ export const POST = withAdmin(async (req, { user, site }) => {
       id: author._id.toString(),
     });
   }
+  await recordActivity({
+    siteId: site.id,
+    user,
+    action: 'author.create',
+    entityType: 'author',
+    entityId: author._id.toString(),
+    entityTitle: author.name,
+    metadata: { slug: author.slug, status: author.status },
+    req,
+  });
   return NextResponse.json(author, { status: 201 });
 });

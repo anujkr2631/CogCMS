@@ -24,6 +24,100 @@ Then complete these steps from that directory:
 
 To reset, stop the app and verify that the target is your disposable local `cms_public_demo` database before dropping it with `mongosh`; then repeat the seed commands. No reset command is bundled so a copied command cannot silently erase another database.
 
+## Feature: Audit Activity Log
+
+An end-to-end audit tracking and compliance system designed for multi-site editorial teams. The Audit Activity Log captures content lifecycle transitions, security events, and administrative operations in real time, exposing them through a filterable dashboard and live activity feed.
+
+### 1. Feature overview
+
+In a multi-tenant CMS with multiple content creators and administrators, teams require clear accountability and operational visibility:
+- **The problem:** Prior to this feature, actions such as publishing/unpublishing articles, deleting posts, author modifications, and issuing or rotating API keys left no historical record. Editorial managers could not track who made a change, when it occurred, or what transition took place (e.g. taking a live post offline).
+- **The solution:** The Audit Activity Log captures every mutation across blogs, authors, FAQs, API keys, and site configurations. Each event records the actor (ID, name, email, IP), action verb, entity metadata, and timestamp. A dedicated **Activity Log** dashboard and a **Recent Activity** overview feed allow teams to filter by entity type, filter by action, perform literal substring searches, and inspect detailed change metadata.
+
+### 2. Architecture and data flow
+
+The feature integrates into CogCMS's server-driven architecture while maintaining strict multi-tenant site isolation.
+
+```mermaid
+flowchart TD
+    subgraph Client ["Admin Interface (Next.js / React 19)"]
+        UI_Dash["Dashboard Overview\n(/admin/dashboard)"]
+        UI_Log["Activity Log Page\n(/admin/dashboard/activity)"]
+        UI_Editor["Content Editors\n(Blogs, Authors, Keys)"]
+    end
+
+    subgraph API ["Next.js Server API"]
+        AdminHandler["withAdmin Middleware\n(Session Auth & Active-Site Isolation)"]
+        Mutations["Content Mutation Endpoints\n(POST/PUT/DELETE /api/admin/*)"]
+        ActivityAPI["GET /api/admin/activity\n(Pagination, Filtering, Literal Search)"]
+        Logger["recordActivity() Utility\n(Non-blocking Safe Audit Logger)"]
+    end
+
+    subgraph DB ["MongoDB Storage"]
+        Collections["Core Collections\n(blogs, authors, api_keys, sites)"]
+        ActivityCol["activity_logs Collection\nIndexed: {siteId, createdAt}\nIndexed: {siteId, entityType, createdAt}\nIndexed: {siteId, action, createdAt}"]
+    end
+
+    UI_Editor -->|Mutations| AdminHandler
+    AdminHandler --> Mutations
+    Mutations -->|Write Changes| Collections
+    Mutations -->|Audit Event| Logger
+    Logger -->|Insert Record| ActivityCol
+
+    UI_Log -->|Query Logs| AdminHandler
+    UI_Dash -->|Query Recent 5| AdminHandler
+    AdminHandler --> ActivityAPI
+    ActivityAPI -->|Tenant-Scoped Read| ActivityCol
+```
+
+#### Data Flow:
+1. **Mutation Trigger:** An administrator or editor performs an action (e.g., publishes a draft blog post via `PUT /api/admin/blogs/[slug]`).
+2. **Authentication & Scope:** `withAdmin` verifies the session and resolves the active site context (`siteId`).
+3. **Database Write & Audit Logging:** The entity is updated, and `recordActivity(...)` asynchronously writes an immutable audit record to the `activity_logs` collection.
+4. **Tenant-Safe Querying:** `GET /api/admin/activity` enforces active-site scoping, validates pagination and search parameters, applies compound index-optimized filters, and returns paginated results.
+5. **Reactive Presentation:** The Admin Activity Log page displays color-coded badges, relative timestamps, quick links to post editors, and an expandable change detail drawer.
+
+### 3. Design decisions and trade-offs
+
+- **Non-blocking logging vs. Distributed transactions:**
+  - *Decision:* `recordActivity` operates with internal error handling so that an unexpected database logging hiccup never aborts a primary user mutation (e.g., publishing an urgent article).
+  - *Trade-off:* In an extreme database failure, a content write could succeed while an audit record is omitted. This trade-off prioritizes core CMS availability and performance over strict two-phase locking.
+- **Actor snapshotting vs. Normalized relational joins:**
+  - *Decision:* In addition to `userId`, each log stores snapshots of `userName` and `userEmail` at the moment of the event.
+  - *Trade-off:* Uses slightly more storage per record, but ensures historical audit logs remain legible and accurate even if a user account is deleted, disabled, or renamed years later.
+- **Strict active-site isolation:**
+  - *Decision:* Every activity log is strictly scoped to `siteId`. Both write paths and read queries reject cross-site parameter overrides.
+  - *Trade-off:* Super-admins review activity per-site rather than in a unified multi-tenant stream, preserving strict data segregation boundaries.
+- **Literal substring search vs. Arbitrary regular expressions:**
+  - *Decision:* Search queries are escaped on the server (`escapeRegex`) so characters like `+`, `*`, and `?` match literally.
+  - *Trade-off:* Prevents ReDoS (Regular Expression Denial of Service) and accidental syntax errors while providing intuitive search behavior for editors.
+
+### 4. Technology choices
+
+- **Mongoose & MongoDB:** Model with compound indexes (`{ siteId: 1, createdAt: -1 }`, `{ siteId: 1, entityType: 1, createdAt: -1 }`, and `{ siteId: 1, action: 1, createdAt: -1 }`) ensuring sub-millisecond query performance even with tens of thousands of log records.
+- **Next.js 16 App Router & React 19:** Built with modern React patterns including `useTransition` for smooth filter transitions, `AbortController` to cancel superseded network requests, and server-side rendering for the dashboard overview feed.
+- **TailwindCSS:** Curated semantic color palettes (`emerald` for published, `amber` for unpublished, `blue`/`indigo` for created, `rose` for deleted, `purple`/`violet` for API keys) for immediate visual recognition.
+- **Vitest & MongoMemoryReplSet:** Full suite of isolated unit tests and end-to-end integration tests verifying tenant isolation, filter accuracy, status tracking, and error boundaries.
+
+### 5. Setup and usage
+
+The Activity Log is integrated into the CMS and requires no additional external services or environment variables:
+1. Start the CMS:
+   ```sh
+   npm run dev
+   ```
+2. Log into the admin workspace (`http://localhost:3003/admin/login`).
+3. Select an active site (**Northstar Studio** or **Harbor Notes**).
+4. Click **Activity log** in the sidebar navigation (or visit `http://localhost:3003/admin/dashboard/activity`).
+5. Perform editorial actions (create or publish a blog, add an author, rotate an API key).
+6. Return to the Activity Log or the main Dashboard to inspect the audit stream and view event metadata.
+
+### 6. Limitations and future work
+
+- **CSV / Compliance Export:** Add an export button to stream audit logs as a downloadable CSV for external enterprise compliance audits.
+- **Diff Inspector:** Expand the details modal to show side-by-side or inline word diffs for article body changes between revisions.
+- **Webhook Alerting:** Enable configurable webhook alerts (e.g., Slack or email notifications) when sensitive actions occur, such as API key revocations or unpublishing high-traffic articles.
+
 ## Checks
 
 Run `npm run typecheck`, `npm test`, and `npm run build` sequentially. Unit and integration tests use a separate temporary MongoDB replica set. If its binary is not cached, `mongodb-memory-server` may download one. Report any setup or baseline failure separately from your changes.

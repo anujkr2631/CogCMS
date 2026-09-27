@@ -1,4 +1,5 @@
 import type { Model } from 'mongoose';
+import ActivityLog from '@/models/ActivityLog';
 import Author from '@/models/Author';
 import ApiKey from '@/models/ApiKey';
 import Blog from '@/models/Blog';
@@ -25,4 +26,5 @@ export const modelRegistry: Model<any>[] = [
   ReleaseNote,
   ApiKey,
   IntakeRateLimit,
+  ActivityLog,
 ];

@@ -8,6 +8,7 @@ import FAQ from '@/models/FAQ';
 import Whitepaper from '@/models/Whitepaper';
 import ReleaseNote from '@/models/ReleaseNote';
 import NewsletterSubscriber from '@/models/NewsletterSubscriber';
+import ActivityLog from '@/models/ActivityLog';
 
 export default async function AdminDashboard() {
   const user = await requireUser();
@@ -47,16 +48,25 @@ export default async function AdminDashboard() {
 
   await connectToDatabase();
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const [blogs, whitepapers, authors, faqs, releaseNotes, subscribers, recentBlogs] =
-    await Promise.all([
-      Blog.countDocuments({ siteId: site.id, status: 'publish' }),
-      Whitepaper.countDocuments({ siteId: site.id, status: 'publish' }),
-      Author.countDocuments({ siteId: site.id, status: 'publish' }),
-      FAQ.countDocuments({ siteId: site.id, status: 'publish' }),
-      ReleaseNote.countDocuments({ siteId: site.id, status: 'publish' }),
-      NewsletterSubscriber.countDocuments({ siteId: site.id }),
-      Blog.countDocuments({ siteId: site.id, createdAt: { $gte: oneWeekAgo } }),
-    ]);
+  const [
+    blogs,
+    whitepapers,
+    authors,
+    faqs,
+    releaseNotes,
+    subscribers,
+    recentBlogs,
+    recentActivities,
+  ] = await Promise.all([
+    Blog.countDocuments({ siteId: site.id, status: 'publish' }),
+    Whitepaper.countDocuments({ siteId: site.id, status: 'publish' }),
+    Author.countDocuments({ siteId: site.id, status: 'publish' }),
+    FAQ.countDocuments({ siteId: site.id, status: 'publish' }),
+    ReleaseNote.countDocuments({ siteId: site.id, status: 'publish' }),
+    NewsletterSubscriber.countDocuments({ siteId: site.id }),
+    Blog.countDocuments({ siteId: site.id, createdAt: { $gte: oneWeekAgo } }),
+    ActivityLog.find({ siteId: site.id }).sort({ createdAt: -1 }).limit(5).lean().exec(),
+  ]);
 
   const modules = [
     ['Blogs', 'Write, review, and publish long-form content.', '/admin/dashboard/blogs', blogs],
@@ -145,6 +155,60 @@ export default async function AdminDashboard() {
               </span>
             </Link>
           ))}
+        </div>
+      </div>
+
+      <div className="mt-12">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-900">Recent Activity</h2>
+            <p className="mt-0.5 text-xs text-stone-500">Latest actions across this site</p>
+          </div>
+          <Link
+            href="/admin/dashboard/activity"
+            className="text-xs font-semibold text-orange-800 hover:text-orange-900 hover:underline"
+          >
+            View full audit trail →
+          </Link>
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
+          {recentActivities.length === 0 ? (
+            <div className="p-8 text-center text-sm text-stone-500">
+              No activity recorded yet for this site.
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-100">
+              {recentActivities.map((act) => (
+                <div
+                  key={act._id.toString()}
+                  className="flex items-center justify-between p-4 hover:bg-stone-50/70"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold text-stone-700">
+                      {act.userName ? act.userName.charAt(0).toUpperCase() : 'S'}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-stone-900">
+                        <span className="font-semibold">{act.userName}</span>{' '}
+                        <span className="text-xs text-stone-500">({act.action})</span>{' '}
+                        {act.entityTitle}
+                      </p>
+                      <p className="text-xs text-stone-500">
+                        {new Date(act.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href="/admin/dashboard/activity"
+                    className="shrink-0 text-xs font-medium text-stone-600 hover:text-stone-950"
+                  >
+                    Details →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

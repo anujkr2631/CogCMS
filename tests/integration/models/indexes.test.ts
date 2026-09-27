@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ensureIndexes } from '@/scripts/ensure-indexes';
 import { modelRegistry } from '@/scripts/model-registry';
+import ActivityLog from '@/models/ActivityLog';
 import Author from '@/models/Author';
 import ApiKey from '@/models/ApiKey';
 import Blog from '@/models/Blog';
@@ -36,6 +37,7 @@ describe('model registry and indexes', () => {
       'release_notes',
       'api_keys',
       'intake_rate_limits',
+      'activity_logs',
     ]);
 
     const blogIndexes = await Blog.collection.indexes();
@@ -71,6 +73,18 @@ describe('model registry and indexes', () => {
       ]),
     );
     expect(apiKeyIndexes.find((index) => index.key.prefix === 1)?.unique).toBe(true);
+
+    const activityLogIndexes = await ActivityLog.collection.indexes();
+    expect(activityLogIndexes.map((index) => index.key)).toEqual(
+      expect.arrayContaining([
+        { _id: 1 },
+        { siteId: 1 },
+        { siteId: 1, createdAt: -1 },
+        { siteId: 1, entityType: 1, createdAt: -1 },
+        { siteId: 1, action: 1, createdAt: -1 },
+        { siteId: 1, userId: 1, createdAt: -1 },
+      ]),
+    );
   });
 
   it('permits tenant-local values across sites and rejects them within one site', async () => {

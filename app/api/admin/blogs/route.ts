@@ -9,6 +9,7 @@ import { renderBlogSnapshot } from '@/lib/render/blog';
 import { invalidateRelatedPosts } from '@/lib/blog-content/related-index';
 import { notifySiteWebhook } from '@/lib/webhook';
 import { assertBlogAuthorIsUsable } from '@/lib/admin/blog-author';
+import { recordActivity } from '@/lib/activity/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,5 +54,15 @@ export const POST = withAdmin(async (req, { user, site }) => {
       id: blog._id.toString(),
     });
   }
+  await recordActivity({
+    siteId: site.id,
+    user,
+    action: blog.status === 'publish' ? 'blog.publish' : 'blog.create',
+    entityType: 'blog',
+    entityId: blog._id.toString(),
+    entityTitle: blog.title,
+    metadata: { slug: blog.slug, status: blog.status },
+    req,
+  });
   return NextResponse.json(blog, { status: 201 });
 });
