@@ -7,6 +7,7 @@ import { notFound, validationError } from '@/lib/http/errors';
 import { issueApiKeySchema } from '@/lib/validation/api-key';
 import ApiKey from '@/models/ApiKey';
 import Site from '@/models/Site';
+import { recordActivity } from '@/lib/activity/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,16 @@ export const POST = withAdmin<{ siteId: string }>(
     await connectToDatabase();
     if (!(await Site.exists({ _id: siteId }))) throw notFound('Site');
     const issued = await issueApiKey({ siteId, createdBy: user.id, ...parsed.data });
+    await recordActivity({
+      siteId,
+      user,
+      action: 'apiKey.create',
+      entityType: 'apiKey',
+      entityId: issued.key._id.toString(),
+      entityTitle: issued.key.name,
+      metadata: { prefix: issued.key.prefix, scopes: issued.key.scopes },
+      req,
+    });
     return NextResponse.json(
       { key: serializeApiKey(issued.key), plaintext: issued.plaintext },
       { status: 201 },

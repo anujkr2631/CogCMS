@@ -5,6 +5,7 @@ import { faqUpdateSchema } from '@/lib/validation/faq';
 import { readJson, withAdmin } from '@/lib/http/admin-handler';
 import { notFound, validationError } from '@/lib/http/errors';
 import { deliveryEventType, notifySiteWebhook } from '@/lib/webhook';
+import { recordActivity } from '@/lib/activity/logger';
 
 export const dynamic = 'force-dynamic';
 type Params = { id: string };
@@ -43,10 +44,20 @@ export const PUT = withAdmin<Params>(async (req, { params, user, site }) => {
       id: faq._id.toString(),
     });
   }
+  await recordActivity({
+    siteId: site.id,
+    user,
+    action: 'faq.update',
+    entityType: 'faq',
+    entityId: faq._id.toString(),
+    entityTitle: faq.question,
+    metadata: { category: faq.category, status: faq.status },
+    req,
+  });
   return NextResponse.json(faq);
 });
 
-export const DELETE = withAdmin<Params>(async (_req, { params, site }) => {
+export const DELETE = withAdmin<Params>(async (req, { params, user, site }) => {
   const { id } = await params;
   if (!validId(id)) throw notFound('FAQ');
   await connectToDatabase();
@@ -60,5 +71,15 @@ export const DELETE = withAdmin<Params>(async (_req, { params, site }) => {
       id: faq._id.toString(),
     });
   }
+  await recordActivity({
+    siteId: site.id,
+    user,
+    action: 'faq.delete',
+    entityType: 'faq',
+    entityId: faq._id.toString(),
+    entityTitle: faq.question,
+    metadata: { category: faq.category },
+    req,
+  });
   return NextResponse.json({ message: 'Deleted successfully' });
 });

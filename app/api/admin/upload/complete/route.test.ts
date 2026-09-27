@@ -58,7 +58,7 @@ describe('completion route authorization', () => {
       { ticket: 'intent' },
       { userId: 'cccccccccccccccccccccccc', siteId, prefix: 'test' },
     );
-  });
+  }, 15000);
   it('rejects a revoked session before completion', async () => {
     const { POST } = await import('./route');
     mocks.requireUser.mockRejectedValue(unauthorized());

@@ -12,6 +12,7 @@ const contentLinks = [
   ['Whitepapers', '/admin/dashboard/whitepapers'],
   ['Release notes', '/admin/dashboard/release-notes'],
   ['Subscribers', '/admin/dashboard/subscribers'],
+  ['Activity log', '/admin/dashboard/activity'],
 ] as const;
 
 export function AdminNavigation({

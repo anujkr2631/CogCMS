@@ -7,6 +7,7 @@ import { serializeSite } from '@/lib/admin/serializers';
 import { updateSiteSchema } from '@/lib/validation/site';
 import Site from '@/models/Site';
 import { notifySiteWebhook } from '@/lib/webhook';
+import { recordActivity } from '@/lib/activity/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export const GET = withAdmin<{ siteId: string }>(
 );
 
 export const PUT = withAdmin<{ siteId: string }>(
-  async (req, { params }) => {
+  async (req, { params, user }) => {
     const { siteId } = await params;
     assertSiteId(siteId);
     const parsed = updateSiteSchema.safeParse(await readJson(req));
@@ -46,6 +47,16 @@ export const PUT = withAdmin<{ siteId: string }>(
       contentType: 'site',
       slug: site.slug,
       id: site._id.toString(),
+    });
+    await recordActivity({
+      siteId: site._id.toString(),
+      user,
+      action: 'site.update',
+      entityType: 'site',
+      entityId: site._id.toString(),
+      entityTitle: site.name,
+      metadata: { slug: site.slug },
+      req,
     });
     return NextResponse.json(serializeSite(site));
   },
